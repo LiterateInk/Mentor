@@ -16,7 +16,7 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Commands {
   Bump {
-    #[arg(value_enum)]
+    #[arg(value_enum, value_name = "type")]
     bump_type: BumpType
   }
 }
