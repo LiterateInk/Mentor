@@ -15,9 +15,14 @@ fn package_swift_path () -> Result<PathBuf> {
 pub fn apply_version (old_version: &str, new_version: &str) -> anyhow::Result<()> {
   let old_content = io::read_file_as_string(package_swift_path()?)?;
 
-  let url_regex = Regex::new("url: \"(.*)\",").unwrap();
-  let captures = url_regex.captures(&old_content).unwrap();
-  let old_url = captures.get(1).unwrap().as_str();
+  let url_regex = Regex::new("url: \"(.*)\",")?;
+  let captures = url_regex.captures(&old_content)
+    .expect("url not found");
+
+  let old_url = captures.get(1)
+    .expect("url not captured")
+    .as_str();
+
   let new_url = old_url.replace(old_version, new_version);
 
   // debug: show the difference

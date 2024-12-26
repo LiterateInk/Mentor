@@ -8,7 +8,7 @@ pub fn read_file_as_string (path: PathBuf) -> Result<String> {
   let mut file = File::open(path)?;
 
   let mut buffer = String::new();
-  file.read_to_string(&mut buffer).unwrap();
+  file.read_to_string(&mut buffer)?;
 
   Ok(buffer)
 }
