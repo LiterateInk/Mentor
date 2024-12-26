@@ -1,6 +1,7 @@
 [package]
 name = "mentor"
 version = "0.0.0"
+description = "A specialized CLI that helps our GitHub Actions handle heavy tasks with a single command."
 authors = ["LiterateInk <contact@literate.ink>"]
 repository = "https://github.com/LiterateInk/Mentor"
 edition = "2021"
@@ -9,4 +10,4 @@ license = "MIT"
 [dependencies]
 anyhow = "1.0"
 cargo_toml = "0.21.0"
-clap = "4.5"
+clap = { version = "4.5", features = ["derive"] }
