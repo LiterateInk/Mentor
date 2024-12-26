@@ -1,0 +1,12 @@
+[package]
+name = "mentor"
+version = "0.0.0"
+authors = ["LiterateInk <contact@literate.ink>"]
+repository = "https://github.com/LiterateInk/Mentor"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+anyhow = "1.0"
+cargo_toml = "0.21.0"
+clap = "4.5"
