@@ -1,12 +1,13 @@
 use cargo_toml::Manifest;
-use std::{env::current_dir, io::Error};
+use std::env::current_dir;
+use anyhow::Result;
 
 pub mod kotlin;
 pub mod swift;
 pub mod rust;
 
-pub fn get_current_version () -> Result<Vec<u8>, cargo_toml::Error> {
-  let path = current_dir()?.join("Cargo.toml");
+pub fn get_current_version () -> Result<Vec<u8>> {
+  let path = rust::cargo_toml_path()?;
   let manifest = Manifest::from_path(path)?;
   let version = manifest.package().version();
 
@@ -40,5 +41,9 @@ pub fn version_to_string (version: Vec<u8>) -> String {
 }
 
 pub fn string_to_version (version: &str) -> Vec<u8> {
-  version.split(".").map(|part| part.parse().unwrap()).collect()
+  version.split(".").map(|part| {
+    part
+      .parse()
+      .expect("only integers are allowed in version")
+  }).collect()
 }
