@@ -1,5 +1,4 @@
 use cargo_toml::Manifest;
-use std::env::current_dir;
 use anyhow::Result;
 
 pub mod kotlin;
@@ -12,6 +11,14 @@ pub fn get_current_version () -> Result<Vec<u8>> {
   let version = manifest.package().version();
 
   Ok(string_to_version(version))
+}
+
+pub fn get_library_name () -> Result<String> {
+  let path = rust::cargo_toml_path()?;
+  let manifest = Manifest::from_path(path)?;
+  let name = manifest.package().name();
+
+  Ok(name.into())
 }
 
 pub fn bump_version (version: &[u8], index: usize) -> Vec<u8> {
