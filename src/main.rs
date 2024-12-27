@@ -71,6 +71,13 @@ fn main() -> anyhow::Result<()> {
       println!("\nApplying to SWIFT");
       swift::apply_version(&old_version, &new_version)?;
       println!("{}", "WARN: 'checksum' property was left intact, make sure to update it manually.".yellow());
+
+      // update Cargo.lock because we changed the version in Cargo.toml
+      let mut child = Command::new("cargo")
+        .args(["generate-lockfile"])
+        .spawn()?;
+        
+      child.wait()?;
     },
     Commands::CiPush { push_type } => {
       let version = version_to_string(get_current_version()?);
