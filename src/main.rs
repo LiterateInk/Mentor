@@ -1,12 +1,20 @@
 mod io;
 mod os;
 mod git;
+mod strings;
 
 mod versionning;
-use versionning::{bump_version, get_library_name, get_current_version, version_to_string, kotlin, swift, rust};
+use versionning::{
+  bump_version,
+  get_library_name,
+  get_current_version,
+  version_to_string,
+  kotlin, swift, rust, js
+};
 
-use std::{fs::create_dir_all, process::Command};
+use std::{env::current_dir, fs::create_dir_all, process::Command};
 use clap::{Parser, Subcommand, ValueEnum};
+use regex::{Regex, Captures};
 use colored::Colorize;
 
 #[derive(Debug, Parser)]
@@ -29,6 +37,7 @@ enum Commands {
   },
   MakeSwift,
   MakeKotlin,
+  MakeJS,
   Version
 }
 
@@ -61,9 +70,15 @@ fn main() -> anyhow::Result<()> {
       let new_version = version_to_string(new_version);
       println!("Bumping version from '{old_version}' to '{new_version}'");
 
-      // apply to configuration files
       println!("\nApplying to RUST");
       rust::apply_version(&old_version, &new_version)?;
+
+      // update Cargo.lock because we changed the version in Cargo.toml
+      let mut child = Command::new("cargo")
+        .args(["generate-lockfile"])
+        .spawn()?;
+
+      child.wait()?;
 
       println!("\nApplying to KOTLIN");
       kotlin::apply_version(&old_version, &new_version)?;
@@ -72,11 +87,14 @@ fn main() -> anyhow::Result<()> {
       swift::apply_version(&old_version, &new_version)?;
       println!("{}", "WARN: 'checksum' property was left intact, make sure to update it manually.".yellow());
 
-      // update Cargo.lock because we changed the version in Cargo.toml
-      let mut child = Command::new("cargo")
-        .args(["generate-lockfile"])
+      println!("\nApplying to JS");
+      js::apply_version(&old_version, &new_version)?;
+
+      // update dependencies to latest version (if any)
+      let mut child = Command::new("pnpm")
+        .args(["add", "@literate.ink/utilities@latest", "@scure/base@latest"])
         .spawn()?;
-        
+
       child.wait()?;
     },
     Commands::CiPush { push_type } => {
@@ -86,7 +104,7 @@ fn main() -> anyhow::Result<()> {
       match push_type {
         PushType::Prepare => {
           git::run(&["add", "."])?;
-          git::run(&["commit", "-m", format!("chore: bump version to v{version}").as_ref()])?;
+          git::run(&["commit", "-m", format!("chore: bump version to v{version} with latest dependencies").as_ref()])?;
           git::run(&["push"])?;
         },
         PushType::Swift => {
@@ -121,7 +139,7 @@ fn main() -> anyhow::Result<()> {
             "--features", "ffi"
           ])
           .spawn()?;
-        
+
         child.wait()?;
       }
 
@@ -141,7 +159,7 @@ fn main() -> anyhow::Result<()> {
         .spawn()?;
 
       child.wait()?;
-      
+
       // cleanup
       let _ = std::fs::remove_dir_all("target/aarch64-x86_64-apple-darwin/release");
       let _ = create_dir_all("target/aarch64-x86_64-apple-darwin/release");
@@ -169,14 +187,14 @@ fn main() -> anyhow::Result<()> {
           "swift", "--swift-sources"
         ])
         .spawn()?;
-      
+
       child.wait()?;
 
       // cleanup
       let _ = std::fs::remove_dir_all("target/uniffi-xcframework-staging");
       let _ = std::fs::remove_dir_all(format!("target/{library_name}FFI.xcframework"));
       let _ = std::fs::remove_dir_all(format!("target/{library_name}FFI.xcframework.zip"));
-      
+
       println!("creating headers and modulemap...");
       let mut child = Command::new("cargo")
         .args([
@@ -190,7 +208,7 @@ fn main() -> anyhow::Result<()> {
           "--modulemap", "--modulemap-filename", "module.modulemap"
         ])
         .spawn()?;
-      
+
       child.wait()?;
 
       println!("creating xcframework...");
@@ -210,7 +228,7 @@ fn main() -> anyhow::Result<()> {
           "-output", format!("target/{library_name}FFI.xcframework").as_ref()
         ])
         .spawn()?;
-      
+
       child.wait()?;
 
       println!("zipping xcframework...");
@@ -221,7 +239,7 @@ fn main() -> anyhow::Result<()> {
           format!("target/{library_name}FFI.xcframework.zip").as_ref()
         ])
         .spawn()?;
-      
+
       child.wait()?;
 
       println!("applying zip checksum...");
@@ -251,7 +269,7 @@ fn main() -> anyhow::Result<()> {
           "--features", "ffi"
         ])
         .spawn()?;
-      
+
       child.wait()?;
 
       let mut child = Command::new("cargo")
@@ -264,6 +282,138 @@ fn main() -> anyhow::Result<()> {
           "--out-dir", "kotlin/src/commonMain/kotlin",
           "--language", "kotlin",
           "--no-format" // prevent ktlint from formatting the generated code
+        ])
+        .spawn()?;
+
+      child.wait()?;
+    },
+    Commands::MakeJS => {
+      let _ = std::fs::remove_dir_all("target/wasm-js-staging");
+
+      let mut child = Command::new("wasm-pack")
+        .args([
+          "build",
+          "--release",
+          "--target", "web",
+          "--out-name", "index",
+          "--out-dir", "target/wasm-js-staging"
+        ])
+        .spawn()?;
+
+      child.wait()?;
+
+      let js_file_path = current_dir()?.join("target/wasm-js-staging/index.js");
+      let js = io::read_file_as_string(js_file_path)?;
+      let types_file_path = current_dir()?.join("target/wasm-js-staging/index.d.ts");
+      let types = io::read_file_as_string(types_file_path)?;
+
+      println!("applying optional and default 'fetcher' to bindings...");
+      let js = format!("{}{}", "const{defaultFetcher}=require(\"@literate.ink/utilities/fetcher\");", js)
+        .replace(", fetcher) {", ",fetcher=defaultFetcher){");
+
+      println!("removing init exports...");
+      let js = js
+        .replace("export { initSync };", "")
+        .replace("export default __wbg_init;", "");
+
+      println!("removing '__wbg_init' function...");
+      let js = strings::remove_from_until(&js,
+        "async function __wbg_init",
+        "return __wbg_finalize_init(instance, module);\n}", true
+      );
+
+      let js = js.replace("__wbg_init.__wbindgen_wasm_module = module;", "");
+
+      println!("removing useless parts in 'initSync' function...");
+      let js = strings::remove_from_until(&js,
+        "if (typeof module !== 'undefined') {",
+        "const imports = __wbg_get_imports();", false
+      );
+
+      let js = strings::remove_from_until(&js,
+        "if (!(module instanceof WebAssembly.Module)) {",
+        "}\n", true
+      );
+
+      let js = js.replace(
+        "new WebAssembly.Instance(module",
+        "new WebAssembly.Instance(new WebAssembly.Module(module)"
+      );
+
+      println!("extracting and removing exports...");
+      let mut exports: Vec<String> = Vec::new();
+
+      let class_re = Regex::new(r"export class (\w+)").unwrap();
+      let js = class_re.replace_all(&js, |caps: &Captures| {
+          let class_name = &caps[1];
+          println!("found class: {}", class_name);
+          exports.push(class_name.to_string());
+          format!("class {}", class_name)
+      }).to_string();
+
+      let function_re = Regex::new(r"export function (\w+)").unwrap();
+      let js = function_re.replace_all(&js, |caps: &Captures| {
+          let function_name = &caps[1];
+          println!("found function: {}", function_name);
+          exports.push(function_name.to_string());
+          format!("function {}", function_name)
+      }).to_string();
+
+      let const_re = Regex::new(r"export const (\w+)").unwrap();
+      let js = const_re.replace_all(&js, |caps: &Captures| {
+          let const_name = &caps[1];
+          println!("found constant: {}", const_name);
+          exports.push(const_name.to_string());
+          format!("const {}", const_name)
+      }).to_string();
+
+      println!("embeding wasm as base64...");
+      let wasm_file_path = current_dir()?.join("target/wasm-js-staging/index_bg.wasm");
+      let wasm = io::read_file_as_base64url(wasm_file_path)?;
+      let mut js = js;
+
+      js += format!(r#"
+        {}
+        const _code = "{wasm}";
+        void initSync(stringToBytes("base64url", _code));
+      "#, "const { stringToBytes } = require(\"@scure/base\");").as_ref();
+
+      println!("rewriting exports...");
+      for export in exports {
+        js += format!("exports.{export}={export};\n").as_ref();
+      }
+
+      // add the type import at the top
+      println!("applying optional and correct type 'fetcher'");
+      let types = format!("{}\n\n{}", "import type { Fetcher } from \"@literate.ink/utilities/fetcher\";", types)
+        // replace every function signature with an optional fetcher (instead of a required one with no type)
+        .replace("fetcher: Function)", "fetcher?: Fetcher)");
+
+      println!("removing useless types exports...");
+      let types= strings::remove_from_until(&types,
+        "export type InitInput",
+        "Promise<InitOutput>;", true
+      );
+
+      // cleanup
+      let _ = std::fs::remove_dir_all(current_dir()?.join("js"));
+      create_dir_all("js")?;
+
+      println!("outputting types...");
+      let types_file_path = current_dir()?.join("js/index.d.ts");
+      io::write_string_to_file(types_file_path, types)?;
+
+      println!("outputting bindings...");
+      let js_file_path = current_dir()?.join("js/index.js");
+      io::write_string_to_file(js_file_path, js)?;
+
+      println!("minifying bindings...");
+      let mut child = Command::new("terser")
+        .args([
+          "js/index.js",
+          "-m", // mangle
+          "-c", // compress
+          "-o", "js/index.js"
         ])
         .spawn()?;
 

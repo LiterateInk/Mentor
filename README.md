@@ -23,6 +23,7 @@ Bumps the version according to SemVer for every language.
 - `rust`: `Cargo.toml` (current version is read from there)
 - `swift`: `Package.swift`
 - `kotlin`: `kotlin/build.gradle.kts`
+- `js`: `package.json` (will also bump dependencies, you need `pnpm` installed)
 
 > In the future, it should also update all instances in the `README.md` to reflect the new version.
 
@@ -83,9 +84,17 @@ Maybe in the future ?
 
 A small utility to commit and push the changes to the repository from GitHub Actions.
 
-- `prepare` : `chore: bump version to v<version>`
+- `prepare` : `chore: bump version to v<version> with latest dependencies`
 - `swift` : `chore: update swift bindings and checksum for v<version>`
 - `release-tag` : creates a tag `<version>` and pushes it to the repository
+
+### `make-js`
+
+Make sure you have `wasm-pack` installed - you can install it using `cargo install wasm-pack`.
+You also need `terser` installed for minification - you can install it using `npm install -g terser`.
+
+Output will be available in the `js` directory.
+You can directly publish the package to `npm` after running this command.
 
 ### `version`
 
