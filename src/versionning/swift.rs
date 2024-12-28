@@ -1,7 +1,5 @@
 use std::env::current_dir;
 use std::path::PathBuf;
-use std::io::Write;
-use std::fs::File;
 
 use anyhow::{anyhow, Result};
 use colored::Colorize;
@@ -34,10 +32,7 @@ pub fn apply_version (old_version: &str, new_version: &str) -> anyhow::Result<()
   }
   else {
     let new_content = old_content.replace(old_url, &new_url);
-  
-    let mut file = File::create(package_swift_path()?)?;
-    file.write_all(new_content.as_bytes())?;
-  
+    io::write_string_to_file(package_swift_path()?, new_content)?;
     Ok(())
   }
 }
@@ -58,9 +53,7 @@ pub fn apply_checksum (new_checksum: &str) -> anyhow::Result<()> {
   println!("{}", format!("+checksum: \"{}\"", new_checksum).green());
 
   let new_content = old_content.replace(old_checksum, new_checksum);
-
-  let mut file = File::create(package_swift_path()?)?;
-  file.write_all(new_content.as_bytes())?;
+  io::write_string_to_file(package_swift_path()?, new_content)?;
 
   Ok(())
 }

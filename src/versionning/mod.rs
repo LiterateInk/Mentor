@@ -4,6 +4,7 @@ use anyhow::Result;
 pub mod kotlin;
 pub mod swift;
 pub mod rust;
+pub mod js;
 
 pub fn get_current_version () -> Result<Vec<u8>> {
   let path = rust::cargo_toml_path()?;

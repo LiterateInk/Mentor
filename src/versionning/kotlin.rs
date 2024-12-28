@@ -1,7 +1,5 @@
 use std::env::current_dir;
 use std::path::PathBuf;
-use std::io::Write;
-use std::fs::File;
 
 use anyhow::{anyhow, Result};
 use colored::Colorize;
@@ -30,9 +28,7 @@ pub fn apply_version (old_version: &str, new_version: &str) -> Result<()> {
     Err(anyhow!("same version after trying to bump, probably incorrect versioning"))
   }
   else {
-    let mut file = File::create(build_grade_kts_path()?)?;
-    file.write_all(new_content.as_bytes())?;
-  
+    io::write_string_to_file(build_grade_kts_path()?, new_content)?;
     Ok(())
   }
 }
