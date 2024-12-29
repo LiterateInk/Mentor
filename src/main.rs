@@ -274,7 +274,7 @@ fn main() -> anyhow::Result<()> {
 
       // build debug version for the bindings
       let mut child = Command::new("cargo")
-        .args(["build"]).spawn()?;
+        .args(["build", "--features", "ffi"]).spawn()?;
 
       child.wait()?;
 
