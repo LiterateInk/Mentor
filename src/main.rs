@@ -401,6 +401,12 @@ fn main() -> anyhow::Result<()> {
         "Promise<InitOutput>;", true
       );
 
+      println!("correct optional paramaters types (`arg: T | null | undefined` into `arg?: T | null`");
+      let regex = Regex::new(r"(\w+): ((.*) \| undefined)").unwrap();
+      let types = regex.replace_all(&types, |caps: &Captures| {
+        format!("{}?: {}", &caps[1], &caps[3])
+      }).to_string();
+
       // cleanup
       let _ = std::fs::remove_dir_all(current_dir()?.join("js"));
       create_dir_all("js")?;
