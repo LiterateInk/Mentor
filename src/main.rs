@@ -93,7 +93,8 @@ fn main() -> anyhow::Result<()> {
       // update dependencies to latest version (if any)
       let mut child = Command::new("pnpm")
         .args(["add", "@literate.ink/utilities@latest", "@scure/base@latest"])
-        .spawn()?;
+        .spawn()
+        .expect("failed to update dependencies, make sure pnpm is installed");
 
       child.wait()?;
     },
