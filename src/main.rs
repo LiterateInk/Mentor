@@ -297,7 +297,7 @@ fn main() -> anyhow::Result<()> {
     Commands::MakeJS => {
       let _ = std::fs::remove_dir_all("target/wasm-js-staging");
 
-      let mut child = Command::new("wasm-pack")
+      Command::new("wasm-pack")
         .args([
           "build",
           "--release",
@@ -305,9 +305,9 @@ fn main() -> anyhow::Result<()> {
           "--out-name", "index",
           "--out-dir", "target/wasm-js-staging"
         ])
-        .spawn()?;
-
-      child.wait()?;
+        .spawn()
+        .expect("failed to build WASM, make sure wasm-pack is installed")
+        .wait()?;
 
       let js_file_path = current_dir()?.join("target/wasm-js-staging/index.js");
       let js = io::read_file_as_string(js_file_path)?;
@@ -453,16 +453,21 @@ fn main() -> anyhow::Result<()> {
       println!("=> js file path: {}", js_file_path.to_str().unwrap().underline());
 
       println!("\nminifying bindings...");
-      let mut child = Command::new("terser")
+      let child = Command::new("terser")
         .args([
           "js/index.js",
           "-m", // mangle
           "-c", // compress
           "-o", "js/index.js"
         ])
-        .spawn()?;
+        .spawn();
 
-      child.wait()?;
+      if let Ok(mut child) = child {
+        child.wait()?;
+      }
+      else {
+        println!("=> {}", "terser not found, skipping minification...".yellow());
+      }
 
       println!("\ndone ! you can now publish the package.");
     },
