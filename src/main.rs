@@ -372,16 +372,19 @@ fn main() -> anyhow::Result<()> {
       let js_file_path = current_dir()?.join("target/wasm-js-staging/index.js");
       let js = io::read_file_as_string(js_file_path)?;
       let types_file_path = current_dir()?.join("target/wasm-js-staging/index.d.ts");
-      let types = io::read_file_as_string(types_file_path)?;
+      let mut types = io::read_file_as_string(types_file_path)?;
 
       println!("\napplying defaultFetcher to JS bindings...");
       println!("=> adding CJS import for defaultFetcher");
       let js = format!(
         "{}{}",
-        "const { defaultFetcher } = require(\"@literate.ink/utilities/fetcher\");", js
+        "const liUtilsFetcher = require(\"@literate.ink/utilities/fetcher\");", js
       );
       println!("=> rewriting every instance of fetcher to make it use defaultFetcher by default");
-      let js = js.replace(", fetcher) {", ", fetcher = defaultFetcher) {");
+      let js = js.replace(
+        ", fetcher) {",
+        ", fetcher = liUtilsFetcher.defaultFetcher) {",
+      );
 
       println!("\ncleaning up js bindings...");
       println!(
@@ -433,8 +436,8 @@ fn main() -> anyhow::Result<()> {
       println!("\nextracting and removing exports...");
       let mut exports: Vec<String> = Vec::new();
 
-      let class_re = Regex::new(r"export class (\w+)").unwrap();
-      let js = class_re
+      let regex = Regex::new(r"export class (\w+)").unwrap();
+      let js = regex
         .replace_all(&js, |caps: &Captures| {
           let class_name = &caps[1];
           println!("=> found class: {}", class_name.bold());
@@ -443,8 +446,8 @@ fn main() -> anyhow::Result<()> {
         })
         .to_string();
 
-      let function_re = Regex::new(r"export function (\w+)").unwrap();
-      let js = function_re
+      let regex = Regex::new(r"export function (\w+)").unwrap();
+      let js = regex
         .replace_all(&js, |caps: &Captures| {
           let function_name = &caps[1];
           println!("=> found function: {}", function_name.bold());
@@ -453,8 +456,8 @@ fn main() -> anyhow::Result<()> {
         })
         .to_string();
 
-      let const_re = Regex::new(r"export const (\w+)").unwrap();
-      let js = const_re
+      let regex = Regex::new(r"export const (\w+)").unwrap();
+      let js = regex
         .replace_all(&js, |caps: &Captures| {
           let const_name = &caps[1];
           println!("=> found constant: {}", const_name.bold());
@@ -466,17 +469,11 @@ fn main() -> anyhow::Result<()> {
       println!("\nembeding wasm as base64...");
       let wasm_file_path = current_dir()?.join("target/wasm-js-staging/index_bg.wasm");
       let wasm = io::read_file_as_base64url(wasm_file_path)?;
-      let mut js = js;
 
-      js += format!(
-        r#"
-        {}
-        const _code = "{wasm}";
-        void initSync(stringToBytes("base64url", _code));
-      "#,
-        "const { stringToBytes } = require(\"@scure/base\");"
-      )
-      .as_ref();
+      let mut js = js;
+      js += "\nconst { stringToBytes } = require(\"@scure/base\");";
+      js += "\nvoid initSync(stringToBytes(\"base64url\", _code));";
+      js += format!("\nconst _code = \"{wasm}\";").as_ref();
 
       println!(
         "=> wasm base64url length: {}",
@@ -489,11 +486,44 @@ fn main() -> anyhow::Result<()> {
         js += format!("exports.{export}={export};\n").as_ref();
       }
 
+      let js_clone = js.clone(); // just so the captures_iter doesn't consume the string
+      println!("\nadding error classes...");
+      let regex = Regex::new(r"new exports.(\w+)\(").unwrap();
+      let error_classes = regex
+        .captures_iter(&js_clone)
+        .filter_map(|cap| cap.get(1).map(|m| m.as_str()))
+        .collect::<Vec<_>>();
+
+      for error_class_name in error_classes {
+        println!("=> adding error class: {error_class_name}");
+
+        let mut output = String::new();
+        output += format!("class {error_class_name} extends Error").as_ref();
+        output += "{\n";
+        output += "\tconstructor(message) {\n";
+        output += "\t\tsuper(message);\n";
+        output += format!("\t\tthis.name = \"{error_class_name}\";\n").as_ref();
+        output += "\t}\n}\n";
+        output += format!("exports.{error_class_name}={error_class_name};\n").as_ref();
+
+        js += &output;
+
+        let mut output = String::new();
+        output += format!("export class {error_class_name} extends Error ").as_ref();
+        output += "{\n";
+        output += "\tconstructor(message: string);\n";
+        output += format!("\treadonly name: \"{error_class_name}\";\n").as_ref();
+        output += "}\n";
+
+        types += &output;
+      }
+
       // add the type import at the top
       println!("\napplying optional and correct type 'fetcher'...");
       let types = format!(
-        "{}\n\n{}",
-        "import type { Fetcher } from \"@literate.ink/utilities/fetcher\";", types
+        "{}\n{}\n\n{types}",
+        "import type { Fetcher } from \"@literate.ink/utilities/fetcher\";",
+        "export type { Fetcher, FetcherError } from \"@literate.ink/utilities/fetcher\";",
       );
 
       // replacing types for `fetcher` argument
@@ -512,22 +542,6 @@ fn main() -> anyhow::Result<()> {
       );
 
       println!("\ncorrecting optional parameters types...");
-
-      // Has been tested against these cases :
-      //
-      // nip: string | null | undefined
-      // nip: Uint8Array | ArrayBuffer | null | undefined
-      // (session: Session | null | undefined, nip: string | null | undefined, fetcher?: Fetcher): Promise<Uint8Array>;
-      // (session: Session, nip: Uint8Array | ArrayBuffer | null | undefined, fetcher?: Fetcher): Promise<Uint8Array>;
-      // (session: Session, nip: Uint8Array | ArrayBuffer | null | undefined, fetcher?: Fetcher): Promise<Uint8Array> | null | undefined;
-      // () => string | null | undefined;
-      // type Session = {
-      //   url: string | null | undefined
-      //   url: string | null | undefined;url: string | null | undefined
-      //   name: SessionName | SessionNaming | null | undefined,
-      //   name: SessionName | SessionNaming | null | undefined
-      //   age: number
-      // }
       let regex = Regex::new(r"(\b\w+\b): ([^,;\n]*) \| undefined").unwrap();
       let types = regex
         .replace_all(&types, |caps: &Captures| {
