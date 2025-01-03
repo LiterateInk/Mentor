@@ -472,8 +472,8 @@ fn main() -> anyhow::Result<()> {
 
       let mut js = js;
       js += "\nconst { stringToBytes } = require(\"@scure/base\");";
-      js += "\nvoid initSync(stringToBytes(\"base64url\", _code));";
       js += format!("\nconst _code = \"{wasm}\";").as_ref();
+      js += "\nvoid initSync(stringToBytes(\"base64url\", _code));";
 
       println!(
         "=> wasm base64url length: {}",
