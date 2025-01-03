@@ -579,8 +579,9 @@ fn main() -> anyhow::Result<()> {
       );
 
       println!("\nminifying bindings...");
-      let child = Command::new("terser")
+      let child = Command::new("pnpx")
         .args([
+          "terser",
           "js/index.js",
           "-m", // mangle
           "-c", // compress

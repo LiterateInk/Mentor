@@ -91,7 +91,6 @@ A small utility to commit and push the changes to the repository from GitHub Act
 ### `make-js`
 
 Make sure you have `wasm-pack` installed - you can install it using `cargo install wasm-pack`.
-You also need `terser` installed for minification - you can install it using `npm install -g terser`.
 
 Output will be available in the `js` directory.
 You can directly publish the package to `npm` after running this command.
