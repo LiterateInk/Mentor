@@ -579,7 +579,7 @@ fn main() -> anyhow::Result<()> {
       );
 
       println!("\nminifying bindings...");
-      let child = Command::new("pnpx")
+      let mut child = Command::new("pnpx")
         .args([
           "terser",
           "js/index.js",
@@ -588,16 +588,10 @@ fn main() -> anyhow::Result<()> {
           "-o",
           "js/index.js",
         ])
-        .spawn();
+        .spawn()
+        .expect("pnpx not found, make sure you have pnpm installed");
 
-      if let Ok(mut child) = child {
-        child.wait()?;
-      } else {
-        println!(
-          "=> {}",
-          "terser not found, skipping minification...".yellow()
-        );
-      }
+      child.wait()?;
 
       println!("\ndone ! you can now publish the package.");
     }
