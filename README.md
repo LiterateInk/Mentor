@@ -12,7 +12,7 @@ cargo install --git https://github.com/LiterateInk/Mentor
 
 This is centered to projects using the [`uniffi`](https://github.com/mozilla/uniffi-rs) library, we recommend using the `git` version for latest fixes, especially concerning Swift 6, even though it's not stable yet.
 
-You might inspire on our repositories, such as [Scodok](https://github.com/LiterateInk/ExperimentalScodok), to understand how this CLI is used, especially in the CI/CD pipeline.
+You might inspire on our repositories, such as [Scodok](https://github.com/LiterateInk/Scodok), to understand how this CLI is used, especially in the CI/CD pipeline.
 
 ## Commands
 
