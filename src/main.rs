@@ -518,12 +518,15 @@ fn main() -> anyhow::Result<()> {
         types += &output;
       }
 
+      println!("=> adding re-export of error class: FetcherError");
+      js += "exports.FetcherError = liUtilsFetcher.FetcherError;\n";
+
       // add the type import at the top
       println!("\napplying optional and correct type 'fetcher'...");
       let types = format!(
         "{}\n{}\n\n{types}",
         "import type { Fetcher } from \"@literate.ink/utilities/fetcher\";",
-        "export type { Fetcher, FetcherError } from \"@literate.ink/utilities/fetcher\";",
+        "export { type Fetcher, FetcherError } from \"@literate.ink/utilities/fetcher\";",
       );
 
       // replacing types for `fetcher` argument
